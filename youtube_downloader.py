@@ -56,9 +56,22 @@ def _run_yt_dlp_info(exe_path, url):
         raise
 
 
-def _run_yt_dlp_download(exe_path, url, outtmpl, format_string, ffmpeg_location=None, progress_callback=None):
+def _run_yt_dlp_download(exe_path, url, outtmpl, format_string, ffmpeg_location=None, progress_callback=None, extra_args=None):
     """Run yt-dlp executable to download a URL and optionally report progress via progress_callback(percent, status)."""
-    cmd = [exe_path, url, '-f', format_string, '-o', outtmpl, '--newline']
+    # Build command with options before the URL
+    cmd = [exe_path]
+    # Extra arguments (e.g., extract audio) before format
+    if extra_args:
+        cmd += extra_args
+    # Format and output template
+    cmd += ['-f', format_string, '-o', outtmpl]
+    # FFMPEG location if specified
+    if ffmpeg_location:
+        cmd += ['--ffmpeg-location', ffmpeg_location]
+    # Newline progress marker
+    cmd += ['--newline']
+    # Finally add URL
+    cmd += [url]
     if ffmpeg_location:
         cmd += ['--ffmpeg-location', ffmpeg_location]
 
@@ -413,8 +426,7 @@ class YouTubeDownloader:
                 fmt = format_string
                 if self.format_var.get() in ['mp3', 'm4a']:
                     fmt = 'bestaudio/best'
-                    # yt-dlp will convert if ffmpeg exists; pass extract args via command
-                    # _run_yt_dlp_download handles passing ffmpeg_location
+                    # Build progress callback
                     def progress_cb(pct, status):
                         try:
                             if pct >= 0:
@@ -423,9 +435,15 @@ class YouTubeDownloader:
                                 self.root.after(0, self._update_progress, -1, status)
                         except Exception:
                             pass
-
-                    # Build output template
-                    _run_yt_dlp_download(yt_exe, url, outtmpl, fmt, ffmpeg_location=ffmpeg_dir, progress_callback=progress_cb)
+                    # Build audio extraction args
+                    extra_args = ['--extract-audio', '--audio-format', self.format_var.get()]
+                    # Run download with audio conversion
+                    _run_yt_dlp_download(
+                        yt_exe, url, outtmpl, fmt,
+                        ffmpeg_location=ffmpeg_dir,
+                        progress_callback=progress_cb,
+                        extra_args=extra_args
+                    )
 
                 else:
                     def progress_cb(pct, status):
